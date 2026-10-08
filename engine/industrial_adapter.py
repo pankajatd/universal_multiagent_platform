@@ -65,7 +65,6 @@ class IndustrialAdapter(BaseProjectAdapter):
         st_module.markdown("### 🏭 Industrial Vision Controls")
 
         defect_options = [
-            "Select a Defect Type...",
             "crack",
             "corrosion",
             "scratch",
@@ -75,7 +74,6 @@ class IndustrialAdapter(BaseProjectAdapter):
         ]
 
         defect_labels = {
-            "Select a Defect Type...": "Select a Defect Type...",
             "crack": "Branching Crack",
             "corrosion": "Oxidation Corrosion",
             "scratch": "Surface Scratch",
@@ -87,6 +85,7 @@ class IndustrialAdapter(BaseProjectAdapter):
         defect_type = st_module.selectbox(
             "Defect Type",
             defect_options,
+            index=0,
             format_func=lambda d: defect_labels.get(d, d),
             key="ind_defect",
         )
@@ -106,7 +105,9 @@ class IndustrialAdapter(BaseProjectAdapter):
 
             t0 = time.perf_counter()
 
-            defect_choice = inputs.get("defect_type", "auto")
+            defect_choice = inputs.get("defect_type", "crack")
+            if not defect_choice or defect_choice == "Select a Defect Type...":
+                defect_choice = "crack"
             frame_idx = inputs.get("frame_index", 101)
             error_choice = inputs.get("error_injection", "none")
 

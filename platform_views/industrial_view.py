@@ -47,11 +47,6 @@ def render_industrial_results(st_module, result):
                 Frame #{frame_index:03d} • Classified: <strong>{defect_name}</strong> (Confidence: {confidence*100:.1f}%) • Severity: <strong>{severity_score} / 10.0 [{severity_level}]</strong>
             </div>
         </div>
-        <div>
-            <a href="http://localhost:8080/?defect={target_defect}&frame={frame_index}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); color:white; padding:9px 16px; border-radius:10px; text-decoration:none; font-size:12px; font-weight:bold; box-shadow:0 4px 12px rgba(79,70,229,0.3); border:1px solid rgba(129,140,248,0.3);">
-                <span>↗ Open in Dedicated Tab (Port 8080)</span>
-            </a>
-        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -106,12 +101,9 @@ def render_industrial_results(st_module, result):
             if manuals:
                 st_module.caption(f"Cited SOP Manuals: {', '.join(manuals)}")
 
-    # 3. Interactive Embedded Control Room (synchronized to selected defect)
-    st_module.markdown("---")
-    st_module.markdown("### 🎛️ Interactive Visual Control Room")
-    cache_bust = int(time.time() * 1000)
-    iframe_url = f"http://localhost:8080/?defect={target_defect}&frame={frame_index}&_t={cache_bust}"
-    st_module.markdown(
-        f'<iframe src="{iframe_url}" width="100%" height="980" style="border:none; border-radius:14px; background:#0b0f19;"></iframe>',
-        unsafe_allow_html=True
-    )
+    # 3. 21-D Feature Extraction & Telemetry
+    features = summary.get("features", {})
+    if features:
+        st_module.markdown("---")
+        with st_module.expander("🔬 21-D Optical & Defect Feature Telemetry", expanded=False):
+            st_module.json(features)

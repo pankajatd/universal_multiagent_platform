@@ -88,10 +88,9 @@ class OCRAdapter(BaseProjectAdapter):
         )
         inputs: Dict[str, Any] = {"input_mode": input_mode}
 
-        sample_options = ["Select Sample..."] + SAMPLE_FILES
+        sample_options = SAMPLE_FILES
 
         sample_labels = {
-            "Select Sample...": "Select Sample...",
             "document_clean.png": "📄 Standard Document (Clean)",
             "document_skewed_noisy.png": "📄 Skewed & Noisy Document",
             "license_plate_clean.png": "🚗 License Plate (Clean)",
@@ -107,15 +106,12 @@ class OCRAdapter(BaseProjectAdapter):
             sample_choice = st_module.selectbox(
                 "Sample Document",
                 sample_options,
+                index=0,
                 format_func=lambda s: sample_labels.get(s, s),
                 key="ocr_sample",
             )
-            if sample_choice and sample_choice != "Select Sample...":
-                inputs["file_path"] = os.path.join(_SOURCE_ROOT, "sample_data", sample_choice)
-                inputs["sample_file"] = sample_choice
-            else:
-                inputs["file_path"] = None
-                inputs["sample_file"] = None
+            inputs["file_path"] = os.path.join(_SOURCE_ROOT, "sample_data", sample_choice)
+            inputs["sample_file"] = sample_choice
         else:
             uploaded = st_module.file_uploader(
                 "Upload Document",
@@ -143,6 +139,11 @@ class OCRAdapter(BaseProjectAdapter):
             file_path = inputs.get("file_path")
             if not file_path and inputs.get("sample_file"):
                 file_path = os.path.join(_SOURCE_ROOT, "sample_data", inputs["sample_file"])
+
+            # Fallback to default document if none specified or file doesn't exist
+            if not file_path or not os.path.exists(file_path):
+                file_path = os.path.join(_SOURCE_ROOT, "sample_data", "document_clean.png")
+
             task_type = inputs.get("task_type", "auto")
             max_retries = inputs.get("max_retries", 2)
 

@@ -186,16 +186,14 @@ st.sidebar.markdown("---")
 inputs = adapter.render_input_controls(st.sidebar)
 
 # ──────────────────────────────────────────────────────────────────────
-# Sidebar — Execute Button (only for projects with on-demand run triggers)
+# Sidebar — Execute Button (Unified for all projects)
 # ──────────────────────────────────────────────────────────────────────
-execute_btn = False
-if selected_key != "face_detection":
-    st.sidebar.markdown("---")
-    execute_btn = st.sidebar.button(
-        "🚀 Execute Pipeline",
-        use_container_width=True,
-        type="primary",
-    )
+st.sidebar.markdown("---")
+execute_btn = st.sidebar.button(
+    "🚀 Execute Pipeline",
+    use_container_width=True,
+    type="primary",
+)
 
 # ──────────────────────────────────────────────────────────────────────
 # Graph Visualization (always shown)
@@ -243,48 +241,111 @@ with st.expander(f"🔗 Agent Workflow Graph — {selected_meta.get('display_nam
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Execution & View Rendering
+# Execution & View Rendering (Unified across all 3 platforms)
 # ──────────────────────────────────────────────────────────────────────
-if selected_key == "face_detection":
-    # ── Standalone Face Detection Live Inspector ──
-    # Directly render the pristine side-by-side interactive dashboard (Port 8050)
-    # without premature synthetic execution or confusing wrapper tabs
-    from platform_views.face_detection_view import render_face_detection_results
-    render_face_detection_results(st, None)
+if execute_btn:
+    with st.spinner(f"⚙️ Running {selected_meta.get('display_name', selected_key)} pipeline..."):
+        try:
+            result = adapter.execute(inputs)
+            st.session_state["last_result"] = result
+            st.session_state["last_project"] = selected_key
+        except Exception as exc:
+            st.error(f"❌ Pipeline execution failed: {exc}")
+            st.stop()
 
-elif selected_key == "industrial_vision_rag":
-    # ── Industrial Vision RAG Control Room (On-Demand Execution) ──
-    current_defect = inputs.get("defect_type")
+# Show results if available for active project
+if "last_result" in st.session_state and st.session_state.get("last_project") == selected_key:
+    result = st.session_state["last_result"]
 
-    if execute_btn:
-        if current_defect in (None, "", "Select a Defect Type..."):
-            st.sidebar.error("⚠️ Please select a Defect Type from the dropdown before clicking Execute.")
-        else:
-            with st.spinner(f"⚙️ Running 6-Agent Industrial Vision Pipeline for '{current_defect}'..."):
-                try:
-                    if not available:
-                        st.info(f"💡 **Live Execution Notice**: To run full real-time computer vision inference with 21-D feature extraction, launch the dedicated cloud platform using the blue button above!")
-                    else:
-                        result = adapter.execute(inputs)
-                        st.session_state["last_result"] = result
-                        st.session_state["last_project"] = selected_key
-                        st.session_state["executed_defect"] = current_defect
-                except Exception as exc:
-                    st.error(f"❌ Pipeline execution failed: {exc}")
-                    st.stop()
-
-    # Check if a valid executed result is available for Industrial Vision
-    if "last_result" in st.session_state and st.session_state.get("last_project") == selected_key:
-        executed_defect = st.session_state.get("executed_defect")
-        if current_defect and current_defect != "Select a Defect Type..." and current_defect != executed_defect:
-            st.info(
-                f"ℹ️ **Selection Changed**: You selected **{current_defect.upper()}** in the sidebar. "
-                f"Click **🚀 Execute Pipeline** to analyze and update the viewport."
-            )
-        result = st.session_state["last_result"]
-        adapter.render_results(st, result)
+    # ── Compact Results Header & Status Bar ──
+    status = result.status
+    if status in ("SUCCESS", "COMPLETED", "HEALED"):
+        status_class = "status-success"
+    elif "PARTIAL" in str(status).upper() or status == "HEALED":
+        status_class = "status-partial"
     else:
-        # Neutral standby state — No image, waiting for user selection and execute click!
+        status_class = "status-failed"
+
+    agent_html = " → ".join(
+        f'<span class="agent-badge">{a}</span>' for a in result.agents_invoked
+    ) if result.agents_invoked else "direct"
+
+    st.markdown(f"""
+    <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:7px 14px; margin-top:2px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <span class="{status_class}">{status}</span>
+            <span style="color:white; font-weight:700; font-size:13px;">{selected_meta.get('icon', '')} {selected_meta.get('display_name', selected_key)}</span>
+            <span style="color:#94a3b8; font-size:11px; font-family:monospace;">⏱️ {result.execution_time_ms:.0f} ms • 🤖 {len(result.agents_invoked)} Agents • 🔧 {len(result.errors_healed)} Healed</span>
+        </div>
+        <div style="font-size:11px; font-family:monospace;">
+            {agent_html}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Tabbed Results ──
+    tab_structured, tab_log, tab_healing, tab_raw = st.tabs([
+        "📊 Structured Output & Inspection",
+        "📜 Execution Log",
+        "🔧 Self-Healing Audit",
+        "🗂️ Raw State",
+    ])
+
+    with tab_structured:
+        adapter.render_results(st, result)
+
+    with tab_log:
+        st.subheader("📜 Execution Log")
+        if result.execution_log:
+            for i, entry in enumerate(result.execution_log, 1):
+                st.text(f"{i:3d}. {entry}")
+        else:
+            st.info("No execution log entries recorded.")
+
+    with tab_healing:
+        st.subheader("🔧 Self-Healing Audit Trail")
+        if result.errors_healed:
+            for i, record in enumerate(result.errors_healed, 1):
+                if isinstance(record, dict):
+                    with st.container():
+                        st.markdown(f"**Healing Event #{i}**")
+                        for k, v in record.items():
+                            st.markdown(f"- **{k}:** {v}")
+                        st.markdown("---")
+                else:
+                    st.markdown(f"**{i}.** {record}")
+        else:
+            st.success("✨ Clean execution pass — zero unhandled errors.")
+
+    with tab_raw:
+        st.subheader("🗂️ Raw State / Summary")
+        raw_display = {
+            "project_name": result.project_name,
+            "status": result.status,
+            "execution_time_ms": result.execution_time_ms,
+            "agents_invoked": result.agents_invoked,
+            "summary": result.summary,
+            "metadata": result.metadata,
+            "errors_healed": result.errors_healed,
+        }
+        def _make_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: _make_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [_make_serializable(v) for v in obj]
+            elif isinstance(obj, (str, int, float, bool, type(None))):
+                return obj
+            else:
+                return str(obj)
+
+        st.json(json.dumps(_make_serializable(raw_display), indent=2, default=str))
+
+else:
+    # Standby views per project
+    if selected_key == "face_detection":
+        from platform_views.face_detection_view import render_face_detection_results
+        render_face_detection_results(st, None)
+    elif selected_key == "industrial_vision_rag":
         st.markdown("---")
         st.markdown("""
         <div style="background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:32px 24px; text-align:center; margin-top:12px;">
@@ -296,120 +357,11 @@ elif selected_key == "industrial_vision_rag":
                 Continuous Conveyor Stream, Real-Time Defect Classification & Autonomous Self-Healing.
             </p>
             <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); padding:8px 18px; border-radius:10px; color:#a5b4fc; font-size:13px; font-weight:600;">
-                <span>👈 Select a <strong>Defect Type</strong> in the sidebar and click <strong>🚀 Execute Pipeline</strong> to inspect</span>
+                <span>👈 Select a <strong>Defect Type</strong> in the sidebar, then click <strong>🚀 Execute Pipeline</strong></span>
             </div>
         </div>
         """, unsafe_allow_html=True)
-
-else:
-    # ── OCR Multi-Agent System (On-Demand Execution) ──
-    if execute_btn:
-        if not inputs.get("file_path"):
-            st.sidebar.error("⚠️ Please select a sample document or upload a file before executing.")
-        else:
-            with st.spinner(f"⚙️ Executing {selected_meta.get('display_name', selected_key)} pipeline..."):
-                try:
-                    if not available:
-                        st.info(f"💡 **Live Execution Notice**: To run full multi-node OCR recognition and error healing, launch the dedicated cloud platform using the blue button above!")
-                    else:
-                        result = adapter.execute(inputs)
-                        st.session_state["last_result"] = result
-                        st.session_state["last_project"] = selected_key
-                except Exception as exc:
-                    st.error(f"❌ Pipeline execution failed: {exc}")
-                    st.stop()
-
-    # Show results if available for OCR
-    if "last_result" in st.session_state and st.session_state.get("last_project") == selected_key:
-        result = st.session_state["last_result"]
-    
-        # ── Compact Results Header & Status Bar ──
-        status = result.status
-        if status in ("SUCCESS", "COMPLETED", "HEALED"):
-            status_class = "status-success"
-        elif "PARTIAL" in str(status).upper() or status == "HEALED":
-            status_class = "status-partial"
-        else:
-            status_class = "status-failed"
-
-        agent_html = " → ".join(
-            f'<span class="agent-badge">{a}</span>' for a in result.agents_invoked
-        ) if result.agents_invoked else "direct"
-
-        st.markdown(f"""
-        <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:7px 14px; margin-top:2px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span class="{status_class}">{status}</span>
-                <span style="color:white; font-weight:700; font-size:13px;">{selected_meta.get('icon', '')} {selected_meta.get('display_name', selected_key)}</span>
-                <span style="color:#94a3b8; font-size:11px; font-family:monospace;">⏱️ {result.execution_time_ms:.0f} ms • 🤖 {len(result.agents_invoked)} Agents • 🔧 {len(result.errors_healed)} Healed</span>
-            </div>
-            <div style="font-size:11px; font-family:monospace;">
-                {agent_html}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-        # ── Tabbed Results ──
-        tab_structured, tab_log, tab_healing, tab_raw = st.tabs([
-            "📊 Structured Output",
-            "📜 Execution Log",
-            "🔧 Self-Healing Audit",
-            "🗂️ Raw State",
-        ])
-    
-        with tab_structured:
-            # Delegate to project-specific view
-            adapter.render_results(st, result)
-    
-        with tab_log:
-            st.subheader("📜 Execution Log")
-            if result.execution_log:
-                for i, entry in enumerate(result.execution_log, 1):
-                    st.text(f"{i:3d}. {entry}")
-            else:
-                st.info("No execution log entries recorded.")
-    
-        with tab_healing:
-            st.subheader("🔧 Self-Healing Audit Trail")
-            if result.errors_healed:
-                for i, record in enumerate(result.errors_healed, 1):
-                    if isinstance(record, dict):
-                        with st.container():
-                            st.markdown(f"**Healing Event #{i}**")
-                            for k, v in record.items():
-                                st.markdown(f"- **{k}:** {v}")
-                            st.markdown("---")
-                    else:
-                        st.markdown(f"**{i}.** {record}")
-            else:
-                st.success("✨ No errors encountered — clean execution pass.")
-    
-        with tab_raw:
-            st.subheader("🗂️ Raw State / Summary")
-            raw_display = {
-                "project_name": result.project_name,
-                "status": result.status,
-                "execution_time_ms": result.execution_time_ms,
-                "agents_invoked": result.agents_invoked,
-                "summary": result.summary,
-                "metadata": result.metadata,
-                "errors_healed": result.errors_healed,
-            }
-            # Filter out non-serializable items
-            def _make_serializable(obj):
-                if isinstance(obj, dict):
-                    return {k: _make_serializable(v) for k, v in obj.items()}
-                elif isinstance(obj, list):
-                    return [_make_serializable(v) for v in obj]
-                elif isinstance(obj, (str, int, float, bool, type(None))):
-                    return obj
-                else:
-                    return str(obj)
-    
-            st.json(json.dumps(_make_serializable(raw_display), indent=2, default=str))
-    
     else:
-        # Standby guide for OCR — No premature execution or images
         st.markdown("---")
         st.markdown("""
         <div style="background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:32px 24px; text-align:center; margin-top:12px;">
@@ -421,7 +373,7 @@ else:
                 Multi-format OCR with intelligent autonomous routing (Documents, License Plates, Invoices) and mathematical audit.
             </p>
             <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(14,165,233,0.1); border:1px solid rgba(14,165,233,0.3); padding:8px 18px; border-radius:10px; color:#38bdf8; font-size:13px; font-weight:600;">
-                <span>👈 Select a <strong>Sample Document</strong> in the sidebar, then click <strong>🚀 Execute Pipeline</strong> to run</span>
+                <span>👈 Select a <strong>Sample Document</strong> in the sidebar, then click <strong>🚀 Execute Pipeline</strong></span>
             </div>
         </div>
         """, unsafe_allow_html=True)

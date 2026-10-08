@@ -1,11 +1,10 @@
-"""Face Detection Multi-Agent adapter for the Universal Platform."""
+import os
 import sys
 import time
 import cv2
 import base64
 import numpy as np
 from typing import Any, Dict, Tuple
-
 from pathlib import Path
 
 # Source project root (bundled in repo or local scratch)
@@ -55,27 +54,77 @@ class FaceDetectionAdapter(BaseProjectAdapter):
     def render_input_controls(self, st_module) -> Dict[str, Any]:
         st_module.markdown("### 👤 Face Detection Controls")
 
-        st_module.info(
-            "📷 **Interactive Workspace Active**\n\n"
-            "Upload photos directly using the **Upload Photos** button in the main panel on the right.\n\n"
-            "You can also click any thumbnail or use **Auto Play All** to inspect the live detection and self-healing loop."
+        input_mode = st_module.radio(
+            "Input Mode",
+            ["Sample Gallery", "Synthetic Streamer", "Upload Photo"],
+            index=0,
+            key="face_input_mode",
+            horizontal=False,
         )
 
-        st_module.markdown("---")
-        st_module.markdown("**Multi-Agent Architecture:**")
-        st_module.markdown(
-            "• **Detector**: YuNet DNN (300×300)\n"
-            "• **Inspector**: Blur / Luminance / Contrast\n"
-            "• **Enhancer**: CLAHE / Unsharp Mask / Hist EQ\n"
-            "• **Auditor**: IoU Verification & Certification"
-        )
-
-        return {
-            "input_mode": "Interactive",
-            "max_iterations": 3,
-            "degradation_type": "none",
-            "severity": "moderate"
+        sample_gallery_dir = Path(_SOURCE_ROOT) / "FaceDetection_Test_images"
+        gallery_images = ["Img1.webp", "Img2.webp", "Img3.jpg", "Img4.jpg", "Img5.jpg", "Img6.jpg"]
+        gallery_labels = {
+            "Img1.webp": "🖼️ Img 1 — Portrait (Clean)",
+            "Img2.webp": "🖼️ Img 2 — Low Light & Shadow",
+            "Img3.jpg": "🖼️ Img 3 — Outdoor Natural Light",
+            "Img4.jpg": "🖼️ Img 4 — High Definition Profile",
+            "Img5.jpg": "🖼️ Img 5 — Group & Multi-Face",
+            "Img6.jpg": "🖼️ Img 6 — Side Profile Angle",
         }
+
+        inputs: Dict[str, Any] = {
+            "input_mode": input_mode,
+            "max_iterations": 3,
+        }
+
+        if input_mode == "Sample Gallery":
+            selected_sample = st_module.selectbox(
+                "Gallery Photo",
+                gallery_images,
+                index=0,
+                format_func=lambda f: gallery_labels.get(f, f),
+                key="face_gallery_select",
+            )
+            inputs["image_path"] = str(sample_gallery_dir / selected_sample)
+            inputs["sample_name"] = selected_sample
+        elif input_mode == "Synthetic Streamer":
+            deg = st_module.selectbox(
+                "Degradation Pattern",
+                ["none", "underexposed", "blurred", "overexposed"],
+                format_func=lambda d: {
+                    "none": "✨ None (Clean Standard)",
+                    "underexposed": "🌑 Underexposed (Low Light / Dark)",
+                    "blurred": "💨 Motion Blur",
+                    "overexposed": "☀️ Overexposed (High Glare)",
+                }.get(d, d),
+                key="face_synth_deg",
+            )
+            sev = st_module.select_slider(
+                "Degradation Severity",
+                options=["mild", "moderate", "severe"],
+                value="moderate",
+                key="face_synth_sev",
+            )
+            inputs["degradation_type"] = deg
+            inputs["severity"] = sev
+        else:
+            uploaded = st_module.file_uploader(
+                "Upload Face Photo",
+                type=["jpg", "jpeg", "png", "webp"],
+                key="face_upload",
+            )
+            inputs["upload_file"] = uploaded
+
+        inputs["max_iterations"] = st_module.slider(
+            "Max Self-Healing Retries",
+            min_value=1,
+            max_value=5,
+            value=3,
+            key="face_max_iter",
+        )
+
+        return inputs
 
     def execute(self, inputs: Dict[str, Any]) -> UniversalResult:
         with scoped_project_environment(_SOURCE_ROOT):
@@ -83,13 +132,16 @@ class FaceDetectionAdapter(BaseProjectAdapter):
             from src.generator.face_streamer import SyntheticFaceStreamer
 
             t0 = time.perf_counter()
-            input_mode = inputs.get("input_mode")
+            input_mode = inputs.get("input_mode", "Sample Gallery")
             max_iterations = inputs.get("max_iterations", 3)
 
             image = None
             metadata: Dict[str, Any] = {}
 
-            if input_mode == "Synthetic Test Image":
+            if input_mode == "Sample Gallery" and inputs.get("image_path") and os.path.exists(inputs["image_path"]):
+                image = cv2.imread(inputs["image_path"])
+                metadata = {"source": inputs.get("sample_name", "gallery")}
+            elif input_mode == "Synthetic Streamer":
                 streamer = SyntheticFaceStreamer()
                 degradation_type = inputs.get("degradation_type", "none")
                 severity_map = {"mild": 0.25, "moderate": 0.5, "severe": 0.8}
@@ -97,11 +149,17 @@ class FaceDetectionAdapter(BaseProjectAdapter):
                 image, metadata = streamer.generate_face_image(
                     degradation_type=degradation_type, severity=severity
                 )
+            elif input_mode == "Upload Photo" and inputs.get("upload_file") is not None:
+                upload_file = inputs["upload_file"]
+                file_bytes = np.asarray(bytearray(upload_file.read()), dtype=np.uint8)
+                image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+                metadata = {"source": getattr(upload_file, "name", "upload")}
             else:
-                upload_file = inputs.get("upload_file")
-                if upload_file is not None:
-                    file_bytes = np.asarray(bytearray(upload_file.read()), dtype=np.uint8)
-                    image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+                # Default fallback: load first gallery image if exists, else synthetic
+                gallery_first = Path(_SOURCE_ROOT) / "FaceDetection_Test_images" / "Img1.webp"
+                if gallery_first.exists():
+                    image = cv2.imread(str(gallery_first))
+                    metadata = {"source": "Img1.webp"}
                 else:
                     streamer = SyntheticFaceStreamer()
                     image, metadata = streamer.generate_face_image()
@@ -129,9 +187,10 @@ class FaceDetectionAdapter(BaseProjectAdapter):
                 conf = det.get("confidence", 0.0)
                 if len(bbox) == 4:
                     x, y, w, h = [int(v) for v in bbox]
-                    cv2.rectangle(output_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    cv2.putText(output_image, f"{conf:.2f}", (x, max(0, y - 5)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    cv2.rectangle(output_image, (x, y), (x + w, y + h), (0, 255, 128), 2)
+                    label = f"YuNet {conf*100:.0f}%" if conf <= 1.0 else f"YuNet {conf:.0f}%"
+                    cv2.putText(output_image, label, (x, max(15, y - 6)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 128), 2)
 
         visualizations = {
             "original_image": _img_to_b64(final_state.get("original_image")),
