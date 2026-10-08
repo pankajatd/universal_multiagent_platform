@@ -176,8 +176,47 @@ if adapter is None:
 
 available, msg = adapter.is_available()
 if not available:
-    st.error(f"❌ Project `{selected_key}` is not available: {msg}")
-    st.info("Make sure the source project and its dependencies are installed.")
+    st.warning(f"ℹ️ **Cloud Environment Notice for `{selected_meta.get('display_name', selected_key)}`**")
+    
+    repo_links = {
+        "ocr_system": {
+            "name": "OCR Multi-Agent LangGraph Platform",
+            "repo": "https://github.com/pankajatd/ocr-multiagent-langgraph-platform",
+            "cloud": "https://share.streamlit.io/deploy?repository=pankajatd/ocr-multiagent-langgraph-platform&branch=main&mainModule=app.py",
+        },
+        "face_detection": {
+            "name": "Human-In-The-Loop Multi-Agent Face Detection SDLC",
+            "repo": "https://github.com/pankajatd/face-detection-hitl-sdlc",
+            "cloud": "https://share.streamlit.io/deploy?repository=pankajatd/face-detection-hitl-sdlc&branch=main&mainModule=dashboard.py",
+        },
+        "industrial_vision_rag": {
+            "name": "Industrial SDLC Vision RAG Platform",
+            "repo": "https://github.com/pankajatd/industrial_sdlc_vision_rag",
+            "cloud": "https://share.streamlit.io/deploy?repository=pankajatd/industrial_sdlc_vision_rag&branch=main&mainModule=streamlit_app.py",
+        }
+    }
+    
+    info = repo_links.get(selected_key)
+    if info:
+        st.markdown(f"""
+        <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid #3b82f6; border-left: 5px solid #3b82f6; border-radius: 8px; padding: 14px 18px; margin: 10px 0 16px 0;">
+            <div style="color: #60a5fa; font-weight: bold; font-size: 15px; margin-bottom: 6px;">
+                🚀 Launch {info['name']}
+            </div>
+            <div style="color: #e2e8f0; font-size: 13px; line-height: 1.5; margin-bottom: 12px;">
+                This project is packaged and maintained in its own <b>dedicated standalone repository</b> on your GitHub account with all code, models, and tests self-contained.<br>
+                Click below to launch it directly on Streamlit Cloud:
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <a href="{info['cloud']}" target="_blank" style="background: #2563eb; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px;">
+                    ☁️ Launch on Streamlit Cloud
+                </a>
+                <a href="{info['repo']}" target="_blank" style="background: #334155; color: #f1f5f9; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px; border: 1px solid #475569;">
+                    🐙 View GitHub Repository
+                </a>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     st.stop()
 
 # ──────────────────────────────────────────────────────────────────────
