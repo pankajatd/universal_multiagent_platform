@@ -1,0 +1,12 @@
+COMMERCIAL SERVICES AGREEMENT 2026
+Section 1: Purpose and Scope
+This document establishes the service-level agreement between Apex Dynamics and Client Corp.
+The vendor agrees to maintain optical quality standards and automated data ingestion pipelines.
+
+Section 2: Performance Metrics and Archiving
+All transactions will be logged in an immutable search index with 99.9% uptime.
+Periodic audits will verify full-text indexing, token frequencies, and layout extraction accuracy.
+
+Section 3: Termination and Signatures
+Either party may terminate this agreement with 30 days written notice.
+Signed: Apex Dynamics Ltd, Date: 2026-09-15

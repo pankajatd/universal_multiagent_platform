@@ -7,8 +7,12 @@ import base64
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-# Source project root
-_SOURCE_ROOT = r"C:\Users\panka\.gemini\antigravity\scratch\ocr_multiagent_system"
+from pathlib import Path
+
+# Source project root (bundled in repo or local scratch)
+_BUNDLED_ROOT = Path(__file__).parent.parent / "bundled" / "ocr"
+_SCRATCH_ROOT = Path(r"C:\Users\panka\.gemini\antigravity\scratch\ocr_multiagent_system")
+_SOURCE_ROOT = str(_BUNDLED_ROOT if _BUNDLED_ROOT.exists() else _SCRATCH_ROOT)
 
 from .base_adapter import BaseProjectAdapter, UniversalResult, scoped_project_environment
 

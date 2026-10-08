@@ -23,9 +23,9 @@ def scoped_project_environment(project_root: str):
         if mod_name == "src" or mod_name.startswith("src."):
             removed_modules[mod_name] = sys.modules.pop(mod_name)
 
-    # Ensure shared venv site-packages is always accessible for langgraph, torch, cv2
+    import os
     sp = r"C:\Users\panka\.gemini\antigravity\scratch\ocr_multiagent_system\venv_ocr\Lib\site-packages"
-    if sp not in sys.path:
+    if os.path.isdir(sp) and sp not in sys.path:
         sys.path.insert(0, sp)
 
     if project_root in sys.path:
