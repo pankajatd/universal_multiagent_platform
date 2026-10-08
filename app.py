@@ -217,7 +217,6 @@ if not available:
             </div>
         </div>
         """, unsafe_allow_html=True)
-    st.stop()
 
 # ──────────────────────────────────────────────────────────────────────
 # Sidebar — Project-specific Input Controls
@@ -302,14 +301,15 @@ elif selected_key == "industrial_vision_rag":
         else:
             with st.spinner(f"⚙️ Running 6-Agent Industrial Vision Pipeline for '{current_defect}'..."):
                 try:
-                    result = adapter.execute(inputs)
-                    st.session_state["last_result"] = result
-                    st.session_state["last_project"] = selected_key
-                    st.session_state["executed_defect"] = current_defect
+                    if not available:
+                        st.info(f"💡 **Live Execution Notice**: To run full real-time computer vision inference with 21-D feature extraction, launch the dedicated cloud platform using the blue button above!")
+                    else:
+                        result = adapter.execute(inputs)
+                        st.session_state["last_result"] = result
+                        st.session_state["last_project"] = selected_key
+                        st.session_state["executed_defect"] = current_defect
                 except Exception as exc:
                     st.error(f"❌ Pipeline execution failed: {exc}")
-                    import traceback
-                    st.code(traceback.format_exc())
                     st.stop()
 
     # Check if a valid executed result is available for Industrial Vision
@@ -348,13 +348,14 @@ else:
         else:
             with st.spinner(f"⚙️ Executing {selected_meta.get('display_name', selected_key)} pipeline..."):
                 try:
-                    result = adapter.execute(inputs)
-                    st.session_state["last_result"] = result
-                    st.session_state["last_project"] = selected_key
+                    if not available:
+                        st.info(f"💡 **Live Execution Notice**: To run full multi-node OCR recognition and error healing, launch the dedicated cloud platform using the blue button above!")
+                    else:
+                        result = adapter.execute(inputs)
+                        st.session_state["last_result"] = result
+                        st.session_state["last_project"] = selected_key
                 except Exception as exc:
                     st.error(f"❌ Pipeline execution failed: {exc}")
-                    import traceback
-                    st.code(traceback.format_exc())
                     st.stop()
 
     # Show results if available for OCR
